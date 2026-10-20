@@ -270,6 +270,43 @@ def commentary(d, ratios, scores, unit, scale) -> list[str]:
     return out
 
 
+def _dp_fmt(k, v):
+    if v is None or not np.isfinite(v):
+        return "-"
+    return f"{v * 100:.1f}%" if k in ("ebit_margin", "net_margin", "roa", "roe") else f"{v:.2f}x"
+
+
+def dupont_section(d, years) -> list:
+    dp = fin.dupont(d)
+    keys = fin.DUPONT_5 + ["net_margin", "roa", "roe"]
+    rows = [_header_cells(["DuPont factor", "Formula"] + [str(y) for y in years])]
+    for k in keys:
+        rows.append([fin.DUPONT[k][0], fin.DUPONT[k][1]] + [_dp_fmt(k, dp.at[k, y]) for y in years])
+    w = (17.4 - 4.2 - 5.6) / len(years)
+    out = [Paragraph("ROE = Tax burden x Interest burden x EBIT margin x Asset turnover x Equity multiplier "
+                     "(EBIT = profit before tax + interest).", FORMULA),
+           _table(rows, [4.2 * cm, 5.6 * cm] + [w * cm] * len(years))]
+    if len(years) > 1:
+        a, b = years[-2], years[-1]
+        b0 = [float(dp.at[f, a]) for f in fin.DUPONT_5]
+        b1 = [float(dp.at[f, b]) for f in fin.DUPONT_5]
+        if all(np.isfinite(b0 + b1)):
+            contrib = fin.chain_substitution(b0, b1)
+            r = [_header_cells(["Factor (chain substitution)", str(a), str(b), "Effect on ROE, pp"])]
+            r += [[fin.DUPONT[f][0], _dp_fmt(f, x), _dp_fmt(f, y), f"{c * 100:+.2f}"]
+                  for f, x, y, c in zip(fin.DUPONT_5, b0, b1, contrib)]
+            r.append(["Total change in ROE", _dp_fmt("roe", np.prod(b0)), _dp_fmt("roe", np.prod(b1)),
+                      f"{sum(contrib) * 100:+.2f}"])
+            main = fin.DUPONT_5[int(np.argmax(np.abs(contrib)))]
+            out += [Spacer(1, 8), Paragraph(f"Why ROE changed from {a} to {b}", H2),
+                    _table(r, [6 * cm, 3.4 * cm, 3.4 * cm, 4.6 * cm]), Spacer(1, 4),
+                    Paragraph(f"ROE moved {sum(contrib) * 100:+.1f} percentage points; the main driver was "
+                              f"<b>{_esc(fin.DUPONT[main][0])}</b> ({contrib[fin.DUPONT_5.index(main)] * 100:+.1f} pp). "
+                              "Chain substitution replaces one factor at a time (in the order shown) from the old to the "
+                              "new value; the contributions add up exactly to the total change.", BODY)]
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Company report
 # ---------------------------------------------------------------------------
@@ -341,7 +378,8 @@ def build_report(d, info, ratios, scores, parts, scale, unit) -> bytes:
         w = (17.4 - 5.2 - 3.4 - 2.6) / len(years)
         s += [KeepTogether([Paragraph(grp, H2), _table(rows, [5.2 * cm, 3.4 * cm] + [w * cm] * len(years) + [2.6 * cm])])]
 
-    s += [PageBreak(), Paragraph("6. Bankruptcy-risk models", H1)]
+    s += [PageBreak(), Paragraph("6. DuPont analysis of ROE", H1)] + dupont_section(d, years)
+    s += [PageBreak(), Paragraph("7. Bankruptcy-risk models", H1)]
     zone_cols = [C[7], C[3], C[2]]
     s.append(chart_small_multiples(
         {fin.SCORE_INFO[k]["label"]: scores.loc[k] for k in fin.SCORE_INFO},
@@ -493,6 +531,10 @@ def course_examples() -> list[tuple[str, str, str]]:
 
 
 QUIZ = [
+    ("DuPont 3-step: write ROE as a product of three ratios.", "Net margin x Asset turnover x Equity multiplier."),
+    ("Net margin 5%, asset turnover 2, equity multiplier 2.5. ROE?", "5% x 2 x 2.5 = 25%."),
+    ("ROE rose only because the equity multiplier rose. Good news?",
+     "Not necessarily - it means more debt financing, so higher financial risk."),
     ("Cash is a: long-term asset / current asset / current liability?", "Current asset."),
     ("Which statement shows the financial position at a single date?", "Balance sheet."),
     ("Formula of the current ratio?", "Current assets / Current liabilities."),
@@ -569,7 +611,29 @@ def build_study_guide(d, info, ratios, scores, scale, unit) -> bytes:
             block.append(Paragraph(f"<b>Example ({last}):</b> not available - input missing for this company.", BODY))
         s.append(KeepTogether(block))
 
-    s += [PageBreak(), Paragraph("5. Bankruptcy-risk models", H1),
+    dp = fin.dupont(d)
+    s += [PageBreak(), Paragraph("5. DuPont analysis - where does ROE come from?", H1),
+          Paragraph("ROE alone does not say <i>why</i> owners earn what they earn. DuPont splits it into drivers you can "
+                    "act on. Multiply and cancel: every denominator cancels the next numerator, leaving Net profit / Equity.",
+                    BODY), Spacer(1, 6),
+          Paragraph("3-step: ROE = Net profit/Revenue x Revenue/Assets x Assets/Equity<br/>"
+                    "          = Net margin x Asset turnover x Equity multiplier<br/>"
+                    "5-step: ROE = Net profit/EBT x EBT/EBIT x EBIT/Revenue x Revenue/Assets x Assets/Equity<br/>"
+                    "          = Tax burden x Interest burden x EBIT margin x Asset turnover x Equity multiplier", FORMULA)]
+    rows = [_header_cells(["Driver", "Formula", "What it tells you", f"{last}"])]
+    for k in fin.DUPONT_5 + ["net_margin", "roa", "roe"]:
+        rows.append([fin.DUPONT[k][0], fin.DUPONT[k][1], fin.DUPONT[k][2], _dp_fmt(k, dp.at[k, last])])
+    s += [_table(rows, [3.3 * cm, 4.6 * cm, 7.2 * cm, 2.3 * cm]), Spacer(1, 6),
+          Paragraph(f"<b>Example ({_esc(name)}, {last}):</b> ROE = "
+                    + " x ".join(_dp_fmt(k, dp.at[k, last]) for k in fin.DUPONT_5)
+                    + f" = <b>{_dp_fmt('roe', dp.at['roe', last])}</b>", BODY), Spacer(1, 4),
+          Paragraph("<b>Three routes to the same ROE:</b> high margin (luxury, software), high asset turnover "
+                    "(supermarkets, retail - thin margin, sell a lot), or high leverage (banks - risky). "
+                    "A rising ROE driven only by the equity multiplier means more debt, not a better business.", BODY),
+          Paragraph("<b>Chain substitution (factor analysis):</b> to explain a change in ROE between two years, replace "
+                    "the factors one by one from old to new values; each step's change in ROE is that factor's "
+                    "contribution. The sum of contributions equals the total change.", BODY)]
+    s += [PageBreak(), Paragraph("6. Bankruptcy-risk models", H1),
           Paragraph("Combine several ratios into one score (Z) with weights found statistically on companies that did and "
                     "did not go bankrupt. Compare Z with the thresholds (zones).", BODY)]
     for k, si in fin.SCORE_INFO.items():
@@ -582,12 +646,12 @@ def build_study_guide(d, info, ratios, scores, scale, unit) -> bytes:
                       f" = <b>{_fmt(scores.at[k, last], 3)}</b> -&gt; {_esc(fin.interpret(k, scores.at[k, last]))}",
                       SMALL)]))
 
-    s += [PageBreak(), Paragraph("6. Course formulas with solved exercises", H1)]
+    s += [PageBreak(), Paragraph("7. Course formulas with solved exercises", H1)]
     for i, (q, f, sol) in enumerate(course_examples(), 1):
         s.append(KeepTogether([Paragraph(f"<b>{i}. {_esc(q)}</b>", BODY), Paragraph(_esc(f), FORMULA),
                                Paragraph(_esc(sol), BODY), Spacer(1, 5)]))
 
-    s += [PageBreak(), Paragraph("7. Self-test", H1),
+    s += [PageBreak(), Paragraph("8. Self-test", H1),
           Paragraph("Cover the answers, try each question, then check.", BODY), Spacer(1, 4)]
     for i, (q, _) in enumerate(QUIZ, 1):
         s.append(Paragraph(f"{i}. {_esc(q)}", BODY))

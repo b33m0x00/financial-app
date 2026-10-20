@@ -18,6 +18,7 @@ formula explanations and an Excel export where every ratio is a live formula.
 | Profit & costs | Revenue -> net profit bars, cost structure (sheet *Costs analysis*), margins |
 | Balance structure | Assets vs liabilities+equity stacks, vertical analysis (% of total assets) |
 | Ratios | Profitability, liquidity, solvency, activity - table + chart with norm band |
+| DuPont | Interactive ROE tree (3/5-step), what-if sliders, target solver, chain-substitution waterfall, driver trends, peer comparison |
 | Bankruptcy risk | Altman (course + original), Taffler, Conan-Holder with zones |
 | Formulas explained | How to read statements, every formula + bond/CAPM/break-even formulas |
 | Export | PDF report (summary + automatic commentary, charts, ratio tables, Z-scores), study guide PDF, flashcards CSV, `.xlsx` with live formulas, CSV |
@@ -29,6 +30,7 @@ numbers yourself, or upload a Data sheet exported by the app.
 
 - `fin.py` - data download (yfinance), input definitions, ratio + Z-score formulas
 - `excel_export.py` - builds the Excel workbook with formulas
+- `dupont_ui.py` - interactive DuPont tab
 - `report.py` - PDF report, study guide (glossary, formulas, worked examples, solved course exercises, self-test), flashcards
 - `app.py` - Streamlit web UI
 

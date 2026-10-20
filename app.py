@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import fin
+import dupont_ui
 import report
 from excel_export import build_workbook
 
@@ -55,20 +56,22 @@ h3 {margin-top: 0.6rem;}
 # ---------------------------------------------------------------------------
 # Sidebar: data source
 # ---------------------------------------------------------------------------
+@st.cache_data(ttl=3600, show_spinner=False)
+def _search(q):
+    return fin.search_company(q)
+
+
+@st.cache_data(ttl=3600, show_spinner="Downloading statements from Yahoo Finance...")
+def _load(sym):
+    return fin.from_yahoo(sym)
+
+
 st.sidebar.title("Data source")
 mode = st.sidebar.radio("Get statements from", ["Yahoo Finance (listed companies)", "Manual entry (any company)"])
 
 data, info = None, {}
 if mode.startswith("Yahoo"):
     q = st.sidebar.text_input("Company name or ticker", value="Apple")
-
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def _search(q):
-        return fin.search_company(q)
-
-    @st.cache_data(ttl=3600, show_spinner="Downloading statements from Yahoo Finance...")
-    def _load(sym):
-        return fin.from_yahoo(sym)
 
     if q.strip():
         try:
@@ -81,7 +84,7 @@ if mode.startswith("Yahoo"):
                                           format_func=lambda h: f"{h['name']} ({h['symbol']}, {h['exchange']})")
             try:
                 data, info = _load(choice["symbol"])
-                info["symbol"] = choice["symbol"]
+                info = {**info, "symbol": choice["symbol"]}
             except Exception as e:
                 st.error(f"Could not load {choice['symbol']}: {e}")
         else:
@@ -155,7 +158,7 @@ kpi(k[3], "Return on sales", "return_on_sales", ratios, suffix="%")
 kpi(k[4], "Current ratio", "current_liquidity", ratios, fmt="{:.2f}")
 kpi(k[5], "Debt ratio", "debt_ratio", ratios, fmt="{:.2f}")
 
-tabs = st.tabs(["Statements", "Profit & costs", "Balance structure", "Ratios", "Bankruptcy risk",
+tabs = st.tabs(["Statements", "Profit & costs", "Balance structure", "Ratios", "DuPont", "Bankruptcy risk",
                 "Formulas explained", "Export"])
 
 # ---------------------------------------------------------------------------
@@ -298,11 +301,17 @@ with tabs[3]:
                 col.plotly_chart(ratio_chart(key, C[gi]), width="stretch")
 
 # ---------------------------------------------------------------------------
-# 5. Bankruptcy risk
+# 5. DuPont
+# ---------------------------------------------------------------------------
+with tabs[4]:
+    dupont_ui.render(d, info, scale, unit_label, style, C, _load, mode.startswith("Yahoo"))
+
+# ---------------------------------------------------------------------------
+# 6. Bankruptcy risk
 # ---------------------------------------------------------------------------
 ZONE_COL = ["rgba(227,73,72,0.13)", "rgba(237,161,0,0.13)", "rgba(27,175,122,0.13)"]
 
-with tabs[4]:
+with tabs[5]:
     st.markdown("Models from **Solvency.xlsx** (sheet *CompanyModel*). Green zone = safe, amber = grey/alert, "
                 "red = distress.")
     if d.loc["personnel_costs"].isna().all():
@@ -377,7 +386,7 @@ file_base = (info.get("symbol") or info.get("name", "company")).replace(" ", "_"
 # ---------------------------------------------------------------------------
 # 6. Formulas explained
 # ---------------------------------------------------------------------------
-with tabs[5]:
+with tabs[6]:
     st.info("Take it offline: the study guide PDF has every term and formula, worked examples on this company's "
             "numbers, the solved course exercises and a self-test. Flashcards import into Anki or Quizlet.")
     learning_downloads(st, "learn")
@@ -434,7 +443,7 @@ Revenue from sales
 # 7. Export
 # ---------------------------------------------------------------------------
 
-with tabs[6]:
+with tabs[7]:
     st.subheader("Report")
     st.markdown("PDF with summary + automatic commentary, statements, charts, ratio tables with assessment, "
                 "bankruptcy models and formula appendix.")

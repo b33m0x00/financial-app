@@ -10,7 +10,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import fin
+import breakeven_ui
 import dupont_ui
+import tools_ui
 import report
 from excel_export import build_workbook
 
@@ -65,6 +67,12 @@ def _search(q):
 def _load(sym):
     return fin.from_yahoo(sym)
 
+
+app_mode = st.sidebar.radio("Mode", ["Company analysis", "Calculators (no company)"], key="app_mode",
+                            help="Calculators: standalone tools where you type only the inputs you have.")
+if app_mode.startswith("Calculators"):
+    tools_ui.render(style, C)
+    st.stop()
 
 st.sidebar.title("Data source")
 mode = st.sidebar.radio("Get statements from", ["Yahoo Finance (listed companies)", "Manual entry (any company)"])
@@ -158,7 +166,7 @@ kpi(k[3], "Return on sales", "return_on_sales", ratios, suffix="%")
 kpi(k[4], "Current ratio", "current_liquidity", ratios, fmt="{:.2f}")
 kpi(k[5], "Debt ratio", "debt_ratio", ratios, fmt="{:.2f}")
 
-tabs = st.tabs(["Statements", "Profit & costs", "Balance structure", "Ratios", "DuPont", "Bankruptcy risk",
+tabs = st.tabs(["Statements", "Profit & costs", "Balance structure", "Ratios", "DuPont", "Break-even & leverage", "Bankruptcy risk",
                 "Formulas explained", "Export"])
 
 # ---------------------------------------------------------------------------
@@ -307,11 +315,17 @@ with tabs[4]:
     dupont_ui.render(d, info, scale, unit_label, style, C, _load, mode.startswith("Yahoo"))
 
 # ---------------------------------------------------------------------------
-# 6. Bankruptcy risk
+# 6. Break-even & leverage
+# ---------------------------------------------------------------------------
+with tabs[5]:
+    breakeven_ui.render(d, scale, unit_label, style, C)
+
+# ---------------------------------------------------------------------------
+# 7. Bankruptcy risk
 # ---------------------------------------------------------------------------
 ZONE_COL = ["rgba(227,73,72,0.13)", "rgba(237,161,0,0.13)", "rgba(27,175,122,0.13)"]
 
-with tabs[5]:
+with tabs[6]:
     st.markdown("Models from **Solvency.xlsx** (sheet *CompanyModel*). Green zone = safe, amber = grey/alert, "
                 "red = distress.")
     if d.loc["personnel_costs"].isna().all():
@@ -386,7 +400,7 @@ file_base = (info.get("symbol") or info.get("name", "company")).replace(" ", "_"
 # ---------------------------------------------------------------------------
 # 6. Formulas explained
 # ---------------------------------------------------------------------------
-with tabs[6]:
+with tabs[7]:
     st.info("Take it offline: the study guide PDF has every term and formula, worked examples on this company's "
             "numbers, the solved course exercises and a self-test. Flashcards import into Anki or Quizlet.")
     learning_downloads(st, "learn")
@@ -443,7 +457,7 @@ Revenue from sales
 # 7. Export
 # ---------------------------------------------------------------------------
 
-with tabs[7]:
+with tabs[8]:
     st.subheader("Report")
     st.markdown("PDF with summary + automatic commentary, statements, charts, ratio tables with assessment, "
                 "bankruptcy models and formula appendix.")

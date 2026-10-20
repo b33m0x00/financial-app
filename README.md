@@ -19,6 +19,7 @@ formula explanations and an Excel export where every ratio is a live formula.
 | Balance structure | Assets vs liabilities+equity stacks, vertical analysis (% of total assets) |
 | Ratios | Profitability, liquidity, solvency, activity - table + chart with norm band |
 | DuPont | Interactive ROE tree (3/5-step), what-if sliders, target solver, chain-substitution waterfall, driver trends, peer comparison |
+| Break-even & leverage | Break-even calculator + chart, solver for price / variable cost / fixed costs / quantity, margin of safety, DOL/DFL/DTL estimated from the statements |
 | Bankruptcy risk | Altman (course + original), Taffler, Conan-Holder with zones |
 | Formulas explained | How to read statements, every formula + bond/CAPM/break-even formulas |
 | Export | PDF report (summary + automatic commentary, charts, ratio tables, Z-scores), study guide PDF, flashcards CSV, `.xlsx` with live formulas, CSV |
@@ -26,11 +27,19 @@ formula explanations and an Excel export where every ratio is a live formula.
 Manual entry mode: for companies not on Yahoo (e.g. Moldovan/Romanian SMEs) type the
 numbers yourself, or upload a Data sheet exported by the app.
 
+## Calculators mode
+
+Sidebar -> Mode -> *Calculators (no company)*: 11 standalone tools where you type only the inputs you have:
+break-even, operating & financial leverage, liquidity, solvency, profitability, DuPont, Z-scores, bond price & YTM,
+time value of money, cost of capital (CAPM, WACC), dividend valuation (Gordon, two-stage).
+
 ## Files
 
 - `fin.py` - data download (yfinance), input definitions, ratio + Z-score formulas
 - `excel_export.py` - builds the Excel workbook with formulas
 - `dupont_ui.py` - interactive DuPont tab
+- `breakeven_ui.py` - break-even calculator and company leverage
+- `tools_ui.py` - standalone calculators
 - `report.py` - PDF report, study guide (glossary, formulas, worked examples, solved course exercises, self-test), flashcards
 - `app.py` - Streamlit web UI
 

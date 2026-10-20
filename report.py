@@ -379,7 +379,20 @@ def build_report(d, info, ratios, scores, parts, scale, unit) -> bytes:
         s += [KeepTogether([Paragraph(grp, H2), _table(rows, [5.2 * cm, 3.4 * cm] + [w * cm] * len(years) + [2.6 * cm])])]
 
     s += [PageBreak(), Paragraph("6. DuPont analysis of ROE", H1)] + dupont_section(d, years)
-    s += [PageBreak(), Paragraph("7. Bankruptcy-risk models", H1)]
+    lv = fin.leverage(d)
+    money = ["variable_costs", "fixed_costs", "contribution", "ebit", "breakeven_revenue"]
+    rows = [_header_cells(["Indicator", "Formula"] + [str(y) for y in years])]
+    for k in lv.index:
+        rows.append([fin.LEVERAGE[k][0], fin.LEVERAGE[k][1]] + [
+            _fmt(lv.at[k, y] / scale, 1) if k in money else
+            (_fmt(lv.at[k, y] * 100, 1) + "%" if np.isfinite(lv.at[k, y]) else "-") if k in ("cm_ratio", "safety_margin")
+            else _fmt(lv.at[k, y]) for y in years])
+    w = (17.4 - 4.2 - 5.6) / len(years)
+    s += [PageBreak(), Paragraph("7. Break-even and leverage", H1),
+          Paragraph(f"Estimate: variable costs = cost of sales, fixed costs = operating expenses ({_esc(unit)}). "
+                    "The real fixed/variable split is internal, so read the levels as approximate.", BODY), Spacer(1, 4),
+          _table(rows, [4.2 * cm, 5.6 * cm] + [w * cm] * len(years))]
+    s += [PageBreak(), Paragraph("8. Bankruptcy-risk models", H1)]
     zone_cols = [C[7], C[3], C[2]]
     s.append(chart_small_multiples(
         {fin.SCORE_INFO[k]["label"]: scores.loc[k] for k in fin.SCORE_INFO},
@@ -531,6 +544,10 @@ def course_examples() -> list[tuple[str, str, str]]:
 
 
 QUIZ = [
+    ("Fixed costs 60,000, price 10, variable cost 6. Break-even units?", "60,000 / (10 - 6) = 15,000 units."),
+    ("Actual sales 20,000 units, break-even 15,000. Margin of safety %?", "(20,000 - 15,000) / 20,000 = 25%."),
+    ("Margin of safety 25%. Degree of operating leverage?", "DOL = 1 / 0.25 = 4 (10% sales change -> 40% EBIT change)."),
+    ("EBIT 200, interest 50. DFL?", "200 / (200 - 50) = 1.33."),
     ("DuPont 3-step: write ROE as a product of three ratios.", "Net margin x Asset turnover x Equity multiplier."),
     ("Net margin 5%, asset turnover 2, equity multiplier 2.5. ROE?", "5% x 2 x 2.5 = 25%."),
     ("ROE rose only because the equity multiplier rose. Good news?",
@@ -633,7 +650,28 @@ def build_study_guide(d, info, ratios, scores, scale, unit) -> bytes:
           Paragraph("<b>Chain substitution (factor analysis):</b> to explain a change in ROE between two years, replace "
                     "the factors one by one from old to new values; each step's change in ROE is that factor's "
                     "contribution. The sum of contributions equals the total change.", BODY)]
-    s += [PageBreak(), Paragraph("6. Bankruptcy-risk models", H1),
+    s += [PageBreak(), Paragraph("6. Break-even, margin of safety and leverage", H1),
+          Paragraph("Fixed costs stay the same when volume changes (rent, management salaries); variable costs move "
+                    "with volume (materials). Each unit sold first covers its variable cost; what remains - the "
+                    "<b>contribution</b> - pays the fixed costs, then becomes profit.", BODY), Spacer(1, 6),
+          Paragraph("Contribution per unit      = Price - Variable cost per unit<br/>"
+                    "Contribution margin ratio  = Contribution / Price<br/>"
+                    "Break-even quantity        = Fixed costs / Contribution per unit<br/>"
+                    "Break-even revenue         = Fixed costs / Contribution margin ratio<br/>"
+                    "Units for target profit    = (Fixed costs + Target profit) / Contribution per unit<br/>"
+                    "Margin of safety (%)       = (Actual sales - Break-even sales) / Actual sales x 100<br/>"
+                    "DOL (operating leverage)   = Contribution / EBIT = %chg EBIT / %chg Sales = 1 / Margin of safety<br/>"
+                    "DFL (financial leverage)   = EBIT / (EBIT - Interest)<br/>"
+                    "DTL (total leverage)       = DOL x DFL", FORMULA),
+          Paragraph("<b>Worked example:</b> fixed costs 100,000, price 600, variable cost 500, planned 1,500 units. "
+                    "Contribution = 100 per unit; break-even = 100,000 / 100 = <b>1,000 units</b> (revenue 600,000). "
+                    "Profit at plan = 100 x 1,500 - 100,000 = 50,000. Margin of safety = 500 units = <b>33.3%</b>. "
+                    "DOL = 150,000 / 50,000 = <b>3</b> = 1 / 0.333: a 10% rise in sales gives a 30% rise in profit "
+                    "(and a 10% fall gives a 30% fall).", BODY), Spacer(1, 4),
+          Paragraph("<b>How to read:</b> margin of safety above 30% is comfortable, 10-20% is risky. High DOL means "
+                    "many fixed costs: profits swing strongly with sales. High DFL means a lot of interest to pay. "
+                    "DTL shows both risks together.", BODY)]
+    s += [PageBreak(), Paragraph("7. Bankruptcy-risk models", H1),
           Paragraph("Combine several ratios into one score (Z) with weights found statistically on companies that did and "
                     "did not go bankrupt. Compare Z with the thresholds (zones).", BODY)]
     for k, si in fin.SCORE_INFO.items():
@@ -646,12 +684,12 @@ def build_study_guide(d, info, ratios, scores, scale, unit) -> bytes:
                       f" = <b>{_fmt(scores.at[k, last], 3)}</b> -&gt; {_esc(fin.interpret(k, scores.at[k, last]))}",
                       SMALL)]))
 
-    s += [PageBreak(), Paragraph("7. Course formulas with solved exercises", H1)]
+    s += [PageBreak(), Paragraph("8. Course formulas with solved exercises", H1)]
     for i, (q, f, sol) in enumerate(course_examples(), 1):
         s.append(KeepTogether([Paragraph(f"<b>{i}. {_esc(q)}</b>", BODY), Paragraph(_esc(f), FORMULA),
                                Paragraph(_esc(sol), BODY), Spacer(1, 5)]))
 
-    s += [PageBreak(), Paragraph("8. Self-test", H1),
+    s += [PageBreak(), Paragraph("9. Self-test", H1),
           Paragraph("Cover the answers, try each question, then check.", BODY), Spacer(1, 4)]
     for i, (q, _) in enumerate(QUIZ, 1):
         s.append(Paragraph(f"{i}. {_esc(q)}", BODY))

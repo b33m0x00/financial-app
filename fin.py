@@ -395,3 +395,57 @@ def chain_substitution(base: list[float], target: list[float]) -> list[float]:
         contrib.append(now - prev)
         prev = now
     return contrib
+
+
+# ---------------------------------------------------------------------------
+# Break-even & leverage
+# ---------------------------------------------------------------------------
+LEVERAGE = {
+    # key: (label, formula, meaning)
+    "variable_costs": ("Variable costs (est.)", "Cost of sales",
+                       "Costs that move with volume. Estimated as cost of sales (materials, production)."),
+    "fixed_costs": ("Fixed costs (est.)", "Distribution + G&A + R&D + other operating",
+                    "Costs that stay the same when volume changes. Estimated as operating expenses."),
+    "contribution": ("Contribution", "Revenue - Variable costs", "What is left to cover fixed costs, then profit."),
+    "cm_ratio": ("Contribution margin ratio", "Contribution / Revenue", "Contribution earned per 1 of sales."),
+    "ebit": ("EBIT (operating profit)", "Contribution - Fixed costs", "Profit from operations."),
+    "breakeven_revenue": ("Break-even revenue", "Fixed costs / Contribution margin ratio",
+                          "Sales needed so that profit = 0."),
+    "safety_margin": ("Margin of safety", "(Revenue - Break-even revenue) / Revenue",
+                      "How far sales can fall before a loss."),
+    "dol": ("Operating leverage (DOL)", "Contribution / EBIT = 1 / Margin of safety",
+            "% change in EBIT for 1% change in sales. High = many fixed costs = risky."),
+    "dol_change": ("DOL from yearly changes", "% change EBIT / % change Revenue",
+                   "Observed sensitivity between two years (unstable if sales barely move)."),
+    "dfl": ("Financial leverage (DFL)", "EBIT / (EBIT - Interest)",
+            "% change in profit before tax for 1% change in EBIT. Comes from interest (debt)."),
+    "dtl": ("Total leverage (DTL)", "DOL x DFL", "% change in profit before tax for 1% change in sales."),
+}
+
+
+def leverage(d: pd.DataFrame) -> pd.DataFrame:
+    """Company-level break-even & leverage estimate (variable = cost of sales, fixed = operating expenses)."""
+    g = d.loc
+    rev = g["revenue"]
+    var = g["cost_of_sales"]
+    fixed = g[["sga", "rd", "other_opex"]].fillna(0).sum()
+    contrib = rev - var
+    ebit = contrib - fixed
+    cm = _div(contrib, rev)
+    be = _div(fixed, cm)
+    interest = g["financial_expenses"].fillna(0)
+    r = {
+        "variable_costs": var, "fixed_costs": fixed, "contribution": contrib, "cm_ratio": cm, "ebit": ebit,
+        "breakeven_revenue": be.where(cm > 0), "safety_margin": _div(rev - be, rev).where(cm > 0),
+        "dol": _div(contrib, ebit),
+        "dol_change": _div(ebit.pct_change(fill_method=None), rev.pct_change(fill_method=None)),
+        "dfl": _div(ebit, ebit - interest),
+    }
+    r["dtl"] = r["dol"] * r["dfl"]
+    return pd.DataFrame(r).T.reindex(list(LEVERAGE))
+
+
+def breakeven_units(fixed: float, price: float, var: float, target_profit: float = 0.0) -> float:
+    """Units needed for target profit: (F + profit) / (P - V)."""
+    cu = price - var
+    return (fixed + target_profit) / cu if cu > 0 else float("nan")
